@@ -53,10 +53,11 @@ if st.button("Predict Machine Failure"):
         "tool_wear": tool_wear
     }
     try:
-        response = requests.post(
-           "https://machine-failure-pred-7wuu.onrender.com/predict",
-            json=input_data,
-            timeout=15
+       response = requests.post(
+    "https://machine-failure-pred-3.onrender.com/predict",
+    json=input_data,
+    timeout=60
+)
         )
         if response.status_code == 200:
             result = response.json()
