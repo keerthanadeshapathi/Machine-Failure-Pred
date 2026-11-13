@@ -1,50 +1,39 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-import pandas as pd
-import joblib
-import os
+import streamlit as st
+import requests
+st.set_page_config(page_title="Machine Failure Prediction", page_icon="⚙️")
+API_URL = "https://machine-failure-pred-3.onrender.com/predict"
+st.title("⚙️ Machine Failure Prediction")
+st.write("Enter machine details to predict whether the machine will fail.")
+machine_type = st.selectbox("Machine Type", ["L", "M", "H"])
+air_temperature = st.number_input("Air Temperature (K)", value=300.0)
+process_temperature = st.number_input("Process Temperature (K)", value=310.0)
+rotational_speed = st.number_input("Rotational Speed (rpm)", value=1500)
+torque = st.number_input("Torque (Nm)", value=40.0)
+tool_wear = st.number_input("Tool Wear (min)", value=100)
+if st.button("Predict Machine Failure"):
+    input_data = {
+        "Type": machine_type,
+        "air_temperature": air_temperature,
+        "process_temperature": process_temperature,
+        "rotational_speed": rotational_speed,
+        "torque": torque,
+        "tool_wear": tool_wear
+    }
 
-app = FastAPI(title="Machine Failure Prediction API")
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-model = joblib.load(os.path.join(BASE_DIR, "machine_failure_model.pkl"))
-model_columns = joblib.load(os.path.join(BASE_DIR, "model_columns.pkl"))
-
-class MachineInput(BaseModel):
-    machine_type: str
-    air_temp: float
-    process_temp: float
-    rotational_speed: float
-    torque: float
-    tool_wear: float
-
-@app.get("/")
-def home():
-    return {"message": "Machine Failure Prediction API is running"}
-
-@app.post("/predict")
-def predict(data: MachineInput):
     try:
-        input_data = {
-            "Air temperature [K]": data.air_temp,
-            "Process temperature [K]": data.process_temp,
-            "Rotational speed [rpm]": data.rotational_speed,
-            "Torque [Nm]": data.torque,
-            "Tool wear [min]": data.tool_wear
-        }
-        df = pd.DataFrame(0, index=[0], columns=model_columns)
-        for column, value in input_data.items():
-            if column in df.columns:
-                df[column] = value
-        type_column = "Type_" + data.machine_type
-        if type_column in df.columns:
-            df[type_column] = 1
+        response = requests.post(API_URL, json=input_data, timeout=120)
+
+        if response.status_code == 200:
+            result = response.json()
+
+            if result["prediction"] == 1:
+                st.error("⚠️ Machine Failure")
+            else:
+                st.success("✅ No Machine Failure")
+
+            st.write("Prediction:", result["prediction"])
         else:
-            raise HTTPException(status_code=400, detail="Invalid machine type")
-        prediction = int(model.predict(df)[0])
-        result = "Machine Failure Predicted" if prediction == 1 else "No Machine Failure Predicted"
-        return {"prediction": prediction, "result": result}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+            st.error(f"API Error: {response.text}")
+
+    except requests.exceptions.RequestException as e:
+        st.error(f"Connection Error: {e}")
