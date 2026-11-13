@@ -1,94 +1,50 @@
-import streamlit as st
-import requests
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import pandas as pd
+import joblib
+import os
 
-st.set_page_config(
-    page_title="Machine Failure Prediction",
-    page_icon="⚙️"
-)
+app = FastAPI(title="Machine Failure Prediction API")
 
-st.title("⚙️ Machine Failure Prediction")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+model = joblib.load(os.path.join(BASE_DIR, "machine_failure_model.pkl"))
+model_columns = joblib.load(os.path.join(BASE_DIR, "model_columns.pkl"))
 
-st.write(
-    "Enter machine details to predict whether the machine will fail."
-)
+class MachineInput(BaseModel):
+    machine_type: str
+    air_temp: float
+    process_temp: float
+    rotational_speed: float
+    torque: float
+    tool_wear: float
 
-machine_type = st.selectbox(
-    "Machine Type",
-    ["L", "M", "H"]
-)
+@app.get("/")
+def home():
+    return {"message": "Machine Failure Prediction API is running"}
 
-air_temperature = st.number_input(
-    "Air Temperature [K]",
-    min_value=250.0,
-    max_value=350.0,
-    value=300.0
-)
-
-process_temperature = st.number_input(
-    "Process Temperature [K]",
-    min_value=250.0,
-    max_value=400.0,
-    value=310.0
-)
-
-rotational_speed = st.number_input(
-    "Rotational Speed [rpm]",
-    min_value=0.0,
-    value=1500.0
-)
-
-torque = st.number_input(
-    "Torque [Nm]",
-    min_value=0.0,
-    value=40.0
-)
-
-tool_wear = st.number_input(
-    "Tool Wear [min]",
-    min_value=0.0,
-    value=100.0
-)
-
-if st.button("Predict Machine Failure"):
-
-    input_data = {
-        "Type": machine_type,
-        "air_temperature": air_temperature,
-        "process_temperature": process_temperature,
-        "rotational_speed": rotational_speed,
-        "torque": torque,
-        "tool_wear": tool_wear
-    }
-
+@app.post("/predict")
+def predict(data: MachineInput):
     try:
-        response = requests.post(
-            "https://machine-failure-pred-3.onrender.com/predict",
-            json=input_data,
-            timeout=60
-        )
-
-        if response.status_code == 200:
-
-            result = response.json()
-
-            if result["prediction"] == 1:
-                st.error("⚠️ Machine Failure Predicted!")
-            else:
-                st.success("✅ No Machine Failure Predicted!")
-
-            st.write("Prediction:", result["prediction"])
-            st.write("Result:", result["result"])
-
+        input_data = {
+            "Air temperature [K]": data.air_temp,
+            "Process temperature [K]": data.process_temp,
+            "Rotational speed [rpm]": data.rotational_speed,
+            "Torque [Nm]": data.torque,
+            "Tool wear [min]": data.tool_wear
+        }
+        df = pd.DataFrame(0, index=[0], columns=model_columns)
+        for column, value in input_data.items():
+            if column in df.columns:
+                df[column] = value
+        type_column = "Type_" + data.machine_type
+        if type_column in df.columns:
+            df[type_column] = 1
         else:
-            st.error("Prediction Failed!")
-            st.write("Status Code:", response.status_code)
-            st.write("Error:", response.text)
-
-    except requests.exceptions.ConnectionError:
-        st.error("Cannot connect to FastAPI. Please check the backend.")
-
-    except requests.exceptions.Timeout:
-        st.error("API request timed out.")
-
+            raise HTTPException(status_code=400, detail="Invalid machine type")
+        prediction = int(model.predict(df)[0])
+        result = "Machine Failure Predicted" if prediction == 1 else "No Machine Failure Predicted"
+        return {"prediction": prediction, "result": result}
+    except HTTPException:
+        raise
     except Exception as e:
-        st.error(f"Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
