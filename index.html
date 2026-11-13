@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Machine Failure Prediction</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f0f2f6;
+            margin: 0;
+            padding: 30px;
+        }
+        .container {
+            max-width: 650px;
+            margin: auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #262730;
+        }
+        p {
+            text-align: center;
+            color: #555;
+        }
+        label {
+            display: block;
+            margin-top: 18px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 12px;
+            margin-top: 7px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 15px;
+        }
+        button {
+            width: 100%;
+            padding: 14px;
+            margin-top: 25px;
+            background: #ff4b4b;
+            color: white;
+            border: none;
+            border-radius: 7px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #e63e3e;
+        }
+        button:disabled {
+            background: #999;
+            cursor: not-allowed;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 7px;
+            text-align: center;
+            font-weight: bold;
+            display: none;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .failure {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .error {
+            background: #fff3cd;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>⚙️ Machine Failure Prediction</h1>
+    <p>Enter machine details to predict whether the machine will fail.</p>
+    <label>Machine Type</label>
+    <select id="machine_type">
+        <option value="L">L</option>
+        <option value="M">M</option>
+        <option value="H">H</option>
+    </select>
+    <label>Air Temperature [K]</label>
+    <input type="number" id="air_temp" value="300" min="250" max="350">
+    <label>Process Temperature [K]</label>
+    <input type="number" id="process_temp" value="310" min="250" max="400">
+    <label>Rotational Speed [rpm]</label>
+    <input type="number" id="rotational_speed" value="1500" min="0">
+    <label>Torque [Nm]</label>
+    <input type="number" id="torque" value="40" min="0">
+    <label>Tool Wear [min]</label>
+    <input type="number" id="tool_wear" value="100" min="0">
+    <button id="predictButton" onclick="predictFailure()">Predict Machine Failure</button>
+    <div id="result"></div>
+</div>
+<script>
+async function predictFailure() {
+    const button = document.getElementById("predictButton");
+    const resultBox = document.getElementById("result");
+    const inputData = {
+        machine_type: document.getElementById("machine_type").value,
+        air_temp: Number(document.getElementById("air_temp").value),
+        process_temp: Number(document.getElementById("process_temp").value),
+        rotational_speed: Number(document.getElementById("rotational_speed").value),
+        torque: Number(document.getElementById("torque").value),
+        tool_wear: Number(document.getElementById("tool_wear").value)
+    };
+    if (Object.values(inputData).some(v => typeof v === "number" && !Number.isFinite(v))) {
+        resultBox.style.display = "block";
+        resultBox.className = "error";
+        resultBox.textContent = "Please enter valid machine values.";
+        return;
+    }
+    button.disabled = true;
+    button.textContent = "Predicting...";
+    resultBox.style.display = "block";
+    resultBox.className = "error";
+    resultBox.textContent = "Connecting to prediction API...";
+    try {
+        const response = await fetch(
+            "https://machine-failure-pred-3.onrender.com/predict",
+            {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(inputData)
+            }
+        );
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.detail || data.message || "Prediction failed");
+        }
+        if (data.prediction === 1) {
+            resultBox.className = "failure";
+            resultBox.textContent = "⚠️ " + data.result;
+        } else {
+            resultBox.className = "success";
+            resultBox.textContent = "✅ " + data.result;
+        }
+        resultBox.textContent += " | Prediction: " + data.prediction;
+    } catch (error) {
+        resultBox.className = "error";
+        resultBox.textContent = "Prediction Failed: " + error.message;
+    } finally {
+        button.disabled = false;
+        button.textContent = "Predict Machine Failure";
+    }
+}
+</script>
+</body>
+</html>
