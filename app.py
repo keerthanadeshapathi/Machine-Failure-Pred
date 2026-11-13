@@ -54,7 +54,7 @@ if st.button("Predict Machine Failure"):
     }
     try:
         response = requests.post(
-            "http://127.0.0.1:8000/predict",
+            https://machine-failure-pred-7wuu.onrender.com/predict,
             json=input_data,
             timeout=15
         )
